@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Watchlist</title>
+    <style>
+        /* Same CSS as before */
+    </style>
+</head>
+<body>
+
+<h1>Stock Watchlist</h1>
+
+<input type="text" id="stock-input" placeholder="Enter stock symbol (e.g., NIFTY)">
+<input type="number" id="alert-threshold" placeholder="Set alert threshold (optional)">
+<button onclick="addStock()">Add to Watchlist</button>
+
+<table>
+    <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>Live Price</th>
+            <th>% Change</th>
+            <th>Volume</th>
+            <th>9 EMA</th>
+            <th>50 SMA</th>
+        </tr>
+    </thead>
+    <tbody id="watchlist-body">
+        <!-- Stock rows will be added here -->
+    </tbody>
+</table>
+
+<script>
+    const watchlist = [];
+    const alertThresholds = {}; // Store thresholds for each stock
+
+    function addStock() {
+        const stockInput = document.getElementById('stock-input').value.trim().toUpperCase();
+        const thresholdInput = parseFloat(document.getElementById('alert-threshold').value.trim());
+        
+        if (stockInput && !watchlist.includes(stockInput) && watchlist.length < 50) {
+            watchlist.push(stockInput);
+            if (!isNaN(thresholdInput)) {
+                alertThresholds[stockInput] = thresholdInput; // Store custom threshold
+            }
+            document.getElementById('stock-input').value = '';
+            document.getElementById('alert-threshold').value = '';
+            updateWatchlist();
+        } else {
+            alert('Invalid stock symbol or already in the watchlist or maximum limit reached.');
+        }
+    }
+
+    function updateWatchlist() {
+        const tbody = document.getElementById('watchlist-body');
+        tbody.innerHTML = '';
+
+        watchlist.forEach(symbol => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${symbol}</td>
+                <td id="${symbol}-price">Fetching...</td>
+                <td id="${symbol}-change">Fetching...</td>
+                <td id="${symbol}-volume">Fetching...</td>
+                <td id="${symbol}-ema">Fetching...</td>
+                <td id="${symbol}-sma">Fetching...</td>
+            `;
+            tbody.appendChild(row);
+            fetchStockData(symbol);
+            fetchIndicators(symbol); // Fetch indicators
+        });
+    }
+
+    async function fetchStockData(symbol) {
+        try {
+            const response = await fetch(`http://localhost:3000/stock/${symbol}`);
+            const data = await response.json();
+
+            const livePrice = parseFloat(data.livePrice);
+            const previousPrice = parseFloat(document.getElementById(`${symbol}-price`).innerText) || livePrice; // Default to current if not yet set
+            
+            document.getElementById(`${symbol}-price`).innerText = livePrice.toFixed(2);
+            document.getElementById(`${symbol}-change`).innerText = `${data.percentChange} %`;
+            document.getElementById(`${symbol}-volume`).innerText = data.volume;
+
+            if (parseFloat(data.percentChange) > 0) {
+                document.getElementById(`${symbol}-change`).classList.add('green');
+                document.getElementById(`${symbol}-change`).classList.remove('red');
+            } else {
+                document.getElementById(`${symbol}-change`).classList.add('red');
+                document.getElementById(`${symbol}-change`).classList.remove('green');
+            }
+
+            // Check if the price has fallen below the threshold
+            const threshold = alertThresholds[symbol] || Infinity; // Use Infinity if no threshold set
+            if (livePrice < threshold && previousPrice >= threshold) {
+                alert(`Alert: ${symbol} price has fallen below ${threshold}! Current price: ${livePrice.toFixed(2)}`);
+            }
+        } catch (error) {
+            console.error("Error fetching stock data:", error);
+        }
+    }
+
+    async function fetchIndicators(symbol) {
+        try {
+            const response = await fetch(`http://localhost:3000/historical/${symbol}`);
+            const data = await response.json();
+
+            document.getElementById(`${symbol}-ema`).innerText = data.ema9 ? data.ema9.toFixed(2) : 'N/A';
+            document.getElementById(`${symbol}-sma`).innerText = data.sma50 ? data.sma50.toFixed(2) : 'N/A';
+        } catch (error) {
+            console.error("Error fetching indicators:", error);
+        }
+    }
+</script>
+
+</body>
+</html>
